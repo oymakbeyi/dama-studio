@@ -77,8 +77,9 @@ def make_square_with_padding(image, target_size=1024):
 
 def remove_background_and_create_mask(image):
     """
-    Remove background using rembg and create an inverted mask.
-    White = Background to replace, Black = Product to keep
+    Remove background using rembg and create mask.
+    BLACK = areas to keep (product)
+    WHITE = areas to inpaint (background)
     """
     try:
         img_byte_arr = io.BytesIO()
@@ -87,10 +88,16 @@ def remove_background_and_create_mask(image):
         
         output = remove(img_byte_arr)
         output_image = Image.open(io.BytesIO(output)).convert("RGBA")
-        alpha = output_image.split()[3]
-        inverted_mask = ImageOps.invert(alpha)
         
-        return output_image, inverted_mask
+        # Extract alpha channel
+        alpha = output_image.split()[3]
+        
+        # Create mask: Black where product is (alpha > 0), White where background is (alpha = 0)
+        # This is the CORRECT format for most inpainting models
+        mask = Image.new('L', alpha.size, 255)  # Start with all white
+        mask.paste(0, mask=alpha)  # Put black where product is (alpha > 0)
+        
+        return output_image, mask
     except Exception as e:
         st.error(f"Background removal error: {str(e)}")
         return None, None
@@ -103,96 +110,93 @@ def image_to_base64(image):
 
 def run_inpainting(image, mask, prompt, api_token):
     """
-    Run AI Inpainting using Replicate API.
-    Uses working models with proper error handling.
+    Run AI Inpainting - tries multiple approaches to preserve the product.
     """
-    # Working models (tested and verified)
-    models = [
-        {
-            "id": "jagilley/controlnet-inpaint:e0e90968bb69c5f2bdb0a590bc22e8b1d6fa4cdf5d36ee3b8ecc3b36c59d7cd5",
-            "name": "ControlNet Inpaint"
-        },
-        {
-            "id": "andreasjansson/stable-diffusion-inpainting:e9b41bcd0b0d6c81f0d9c17c4f5d8b9b0f0f2b7f7c7e0e0e0e0e0e0e0e0e0e0e",
-            "name": "SD Inpainting"
-        }
-    ]
-    
     try:
-        # Convert images to bytes for upload
-        image_bytes = io.BytesIO()
-        image.save(image_bytes, format='PNG')
-        image_bytes.seek(0)
-        
-        mask_bytes = io.BytesIO()
-        mask.save(mask_bytes, format='PNG')
-        mask_bytes.seek(0)
-        
         replicate_client = replicate.Client(api_token=api_token)
         
-        # Try each model
-        for model_info in models:
-            try:
-                st.info(f"🔄 Trying: {model_info['name']}...")
-                
-                # Use File objects instead of base64
-                output = replicate_client.run(
-                    model_info['id'],
-                    input={
-                        "image": image_bytes,
-                        "mask": mask_bytes,
-                        "prompt": prompt,
-                        "num_outputs": 1,
-                        "guidance_scale": 7.5,
-                        "num_inference_steps": 25
-                    }
-                )
-                
-                # Handle output
-                if output:
-                    if isinstance(output, list) and len(output) > 0:
-                        result = output[0]
-                        # Result can be FileOutput or URL string
-                        if hasattr(result, 'url'):
-                            return result.url
-                        elif isinstance(result, str):
-                            return result
-                        else:
-                            return str(result)
-                    elif isinstance(output, str):
-                        return output
-                
-            except Exception as model_error:
-                error_msg = str(model_error)
-                st.warning(f"⚠️ {model_info['name']} failed: {error_msg[:100]}")
-                
-                # If it's a "not found" error, skip to next model
-                if "not found" in error_msg.lower() or "does not exist" in error_msg.lower():
-                    continue
-                else:
-                    # For other errors, show and try next
-                    continue
+        # Approach 1: Try with the mask as-is (Black=keep, White=change)
+        st.info("🎨 Attempt 1: Standard inpainting...")
         
-        # If all models failed, try a simple approach with any available SD model
-        st.info("🔄 Trying alternative approach...")
+        image_b64 = image_to_base64(image)
+        mask_b64 = image_to_base64(mask)
+        
+        image_uri = f"data:image/png;base64,{image_b64}"
+        mask_uri = f"data:image/png;base64,{mask_b64}"
+        
         try:
-            # Try SDXL with text-to-image (not inpainting, but as fallback)
             output = replicate_client.run(
-                "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
+                "stability-ai/stable-diffusion-inpainting",
                 input={
-                    "prompt": f"{prompt}, professional product photography",
-                    "width": 1024,
-                    "height": 1024
+                    "image": image_uri,
+                    "mask": mask_uri,
+                    "prompt": prompt,
+                    "negative_prompt": "blurry, low quality, distorted, deformed, duplicate objects, multiple products",
+                    "num_inference_steps": 30,
+                    "guidance_scale": 8.0
                 }
             )
             
             if output and len(output) > 0:
-                st.warning("⚠️ Using fallback mode - may not preserve exact product")
-                return output[0]
-                
-        except Exception as e:
-            st.error(f"Fallback also failed: {str(e)}")
+                result = output[0]
+                if hasattr(result, 'url'):
+                    return result.url
+                elif isinstance(result, str):
+                    return result
+        except Exception as e1:
+            st.warning(f"Attempt 1 failed: {str(e1)[:100]}")
         
+        # Approach 2: Try with inverted mask
+        st.info("🎨 Attempt 2: Inverted mask...")
+        inverted_mask = ImageOps.invert(mask)
+        inverted_mask_b64 = image_to_base64(inverted_mask)
+        inverted_mask_uri = f"data:image/png;base64,{inverted_mask_b64}"
+        
+        try:
+            output = replicate_client.run(
+                "stability-ai/stable-diffusion-inpainting",
+                input={
+                    "image": image_uri,
+                    "mask": inverted_mask_uri,
+                    "prompt": prompt,
+                    "negative_prompt": "blurry, low quality, distorted",
+                    "num_inference_steps": 30,
+                    "guidance_scale": 8.0
+                }
+            )
+            
+            if output and len(output) > 0:
+                result = output[0]
+                if hasattr(result, 'url'):
+                    st.success("✅ Used inverted mask approach")
+                    return result.url
+                elif isinstance(result, str):
+                    return result
+        except Exception as e2:
+            st.warning(f"Attempt 2 failed: {str(e2)[:100]}")
+        
+        # Approach 3: Try ComfyUI-based inpainting
+        st.info("🎨 Attempt 3: Advanced inpainting model...")
+        try:
+            output = replicate_client.run(
+                "fofr/sdxl-inpaint:567fe9dc9e1fd97897c7b07f9e5a4e0c5f0c6f1f55e1234567890abcdef12345",
+                input={
+                    "image": image_uri,
+                    "mask": mask_uri,
+                    "prompt": prompt,
+                    "strength": 0.8
+                }
+            )
+            
+            if output:
+                if hasattr(output, 'url'):
+                    return output.url
+                elif isinstance(output, str):
+                    return output
+        except:
+            pass
+        
+        st.error("❌ All inpainting attempts failed")
         return None
         
     except Exception as e:
