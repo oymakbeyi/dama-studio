@@ -48,10 +48,12 @@ st.markdown("---")
 
 # Predefined High-Quality Prompts
 SCENE_PROMPTS = {
-    "Marble Kitchen Table": "Elegant ceramic piece on a luxurious white marble kitchen countertop, natural daylight from window, soft shadows, kitchen environment with subtle blurred background, 8k resolution, photorealistic, commercial product photography, soft lighting",
-    "Wooden Living Room Console": "Beautiful ceramic product on a warm wooden console table in a contemporary living room, minimalist interior design, soft ambient lighting, cozy atmosphere, depth of field, 8k resolution, photorealistic, professional styling",
-    "Modern Concrete Setting": "Ceramic design piece on polished concrete surface, modern industrial aesthetic, clean lines, dramatic side lighting, architectural photography style, 8k resolution, photorealistic, high-end editorial look",
-    "White E-commerce Background": "Professional product photography of ceramic piece on pure white seamless background, studio lighting, soft shadows, commercial e-commerce style, 8k resolution, photorealistic, crisp and clean"
+    "🏠 Marble Kitchen": "Elegant ceramic piece on a luxurious white marble kitchen countertop, natural daylight from window, soft shadows, kitchen environment with subtle blurred background, 8k resolution, photorealistic, commercial product photography, soft lighting",
+    "🪵 Wooden Console": "Beautiful ceramic product on a warm wooden console table in a contemporary living room, minimalist interior design, soft ambient lighting, cozy atmosphere, depth of field, 8k resolution, photorealistic, professional styling",
+    "🏗️ Concrete Modern": "Ceramic design piece on polished concrete surface, modern industrial aesthetic, clean lines, dramatic side lighting, architectural photography style, 8k resolution, photorealistic, high-end editorial look",
+    "⚪ White Studio": "Professional product photography of ceramic piece on pure white seamless background, studio lighting, soft shadows, commercial e-commerce style, 8k resolution, photorealistic, crisp and clean",
+    "🌿 Natural Wood": "Ceramic vase on rustic reclaimed wood surface, natural organic texture, warm earth tones, soft natural window light, botanical styling, 8k resolution, photorealistic, artisanal aesthetic",
+    "✨ Luxury Dark": "Premium ceramic piece on black marble surface, dramatic lighting, luxury boutique atmosphere, elegant sophisticated styling, gold accents in background, 8k resolution, photorealistic, high-end editorial"
 }
 
 PRODUCT_TYPES = ["Vase", "Bowl", "Plate", "Cup", "Sculpture", "Decorative Object"]
@@ -174,18 +176,26 @@ with st.sidebar:
     st.markdown("---")
     
     # Product Type Selection
+    st.markdown("**Product Type**")
     product_type = st.selectbox(
         "Product Type",
         PRODUCT_TYPES,
-        index=0
+        index=0,
+        label_visibility="collapsed"
     )
     
+    st.markdown("**Background Scene**")
     # Scene Selection
     selected_scene = st.selectbox(
         "Background Scene",
         list(SCENE_PROMPTS.keys()),
-        index=0
+        index=0,
+        label_visibility="collapsed"
     )
+    
+    # Show selected prompt preview
+    with st.expander("📝 View Full Prompt"):
+        st.caption(SCENE_PROMPTS[selected_scene])
     
     st.markdown("---")
     st.markdown("### 📋 Instructions")
