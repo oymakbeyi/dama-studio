@@ -18,8 +18,8 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("DAMA STUDIO v2 🎨")
-st.markdown("### El Yapımı Ürünler İçin Yapay Zeka Fotoğraf Stüdyosu")
+st.title("DAMA STUDIO (Pro Mode) 🎨")
+st.markdown("### El Yapımı Ürünler İçin Hassas Koruma Modu")
 
 # --- API ANAHTARI ---
 if 'REPLICATE_API_TOKEN' in st.secrets:
@@ -45,12 +45,12 @@ with st.sidebar:
         )
     )
     
-    # GÜÇLÜ PROMPT STRATEJİSİ
+    # DAHA KISA VE NET PROMPT (Arka plana odaklı)
     prompts = {
-        "Mermer Masa & Gün Işığı": "placed on a white marble table, bright kitchen background, morning sunlight coming from window, soft shadows, 8k, photorealistic, architectural digest style",
-        "Ahşap Konsol & Loş Işık": "placed on a wooden table, cozy warm lighting, blurred living room background, cinematic lighting, 8k, photorealistic",
-        "Beton Zemin & Modern": "placed on a grey concrete surface, minimalist style, indoor plant shadows, soft studio lighting, 8k, photorealistic",
-        "Düz Beyaz Sonsuz Fon": "placed on a pure white seamless infinity curve background, professional product photography, soft shadow, commercial lighting"
+        "Mermer Masa & Gün Işığı": "white marble table, bright modern kitchen background, morning window light, soft shadows, 4k, photorealistic",
+        "Ahşap Konsol & Loş Işık": "rustic wooden table, cozy warm lighting, blurred living room background, cinematic lighting, 4k",
+        "Beton Zemin & Modern": "grey concrete pedestal, minimalist architectural style, indoor plant shadows, soft studio lighting, 4k",
+        "Düz Beyaz Sonsuz Fon": "pure white seamless infinity curve background, professional product photography, soft ground shadow"
     }
     
     selected_prompt = prompts[scene]
@@ -59,63 +59,65 @@ with st.sidebar:
 uploaded_file = st.file_uploader("Fotoğraf Yükle", type=["jpg", "png", "jpeg"])
 
 if uploaded_file and replicate_api:
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     
     # 1. Orijinal Resmi Aç
     image = Image.open(uploaded_file).convert("RGB")
-    
-    # Resmi yeniden boyutlandır (Hız ve Kalite için ideal boyut: 1024x1024)
-    # Çok büyük resimler işlem süresini uzatır ve hata verebilir.
-    image.thumbnail((1024, 1024))
+    # İşlem hızı ve kalitesi için boyutu optimize et (512x512 bu model için idealdir)
+    image = image.resize((512, 512))
     
     with col1:
-        st.caption("Orijinal Fotoğraf")
+        st.caption("1. Orijinal")
         st.image(image, use_container_width=True)
 
-    if st.button("✨ Sihirli Dokunuşu Yap (Render)"):
-        with st.spinner("Yapay zeka önce maske çıkarıyor, sonra sahneyi boyuyor..."):
+    if st.button("✨ Sihirli Dokunuşu Yap"):
+        with st.spinner("Vazo korunuyor, arka plan inşa ediliyor..."):
             try:
-                # ADIM 1: MASKE OLUŞTURMA (En Kritik Kısım)
-                # Rembg ile arkaplanı siliyoruz
+                # ADIM 1: MASKE OLUŞTURMA
                 buf = io.BytesIO()
                 image.save(buf, format="PNG")
                 image_bytes = buf.getvalue()
                 
-                # Arkaplanı temizle (Sadece ürün kalsın)
+                # Arkaplanı temizle
                 no_bg_image = remove(image_bytes)
                 pil_no_bg = Image.open(io.BytesIO(no_bg_image)).convert("RGBA")
                 
-                # Maskeyi Çıkar: Sadece Alpha kanalını al
-                # Alpha kanalında; Ürün=Beyaz, Arkaplan=Siyah olur.
+                # Maskeyi Çıkar (Alpha Kanalı)
+                # Beyaz = Ürün, Siyah = Arka Plan
                 mask = pil_no_bg.split()[-1]
                 
-                # TERS ÇEVİR: Inpainting için Maske; Değişecek yer BEYAZ, Korunacak yer SİYAH olmalı.
-                # Yani Arkaplanı Beyaz, Ürünü Siyah yapıyoruz.
+                # TERS ÇEVİR (Invert):
+                # Bu modelde: BEYAZ = Değişecek Alan (Arka Plan), SİYAH = Korunacak Alan (Ürün)
                 inverted_mask = ImageOps.invert(mask)
                 
-                # Dosyaları kaydet (Replicate'e göndermek için)
-                image.save("temp_original.jpg")
+                with col2:
+                    st.caption("2. Koruma Kalkanı (Maske)")
+                    st.image(inverted_mask, use_container_width=True)
+                    st.info("Siyah alan korunur, Beyaz alan değişir.")
+
+                # Dosyaları kaydet
+                image.save("temp_orig.jpg")
                 inverted_mask.save("temp_mask.png")
 
-                # ADIM 2: REPLICATE (INPAINTING)
-                # Orijinal resmi veriyoruz + Nereyi değiştireceğini maske ile söylüyoruz.
+                # ADIM 2: REPLICATE (STRICT INPAINTING)
+                # Model Değişikliği: 'stability-ai/stable-diffusion-inpainting'
+                # Bu model maskeye çok daha sadıktır.
                 
                 output = replicate.run(
-                    "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
+                    "stability-ai/stable-diffusion-inpainting:95b7223104132402a9ae91cc677285bc5eb997834bd2349fa486f53910fd595c",
                     input={
-                        "prompt": f"Professional product photo of a {product_type}, {selected_prompt}",
-                        "negative_prompt": "text, watermark, low quality, distorted, bad anatomy, floating object",
-                        "image": open("temp_original.jpg", "rb"),
+                        "prompt": f"background of {selected_prompt}",
+                        "image": open("temp_orig.jpg", "rb"),
                         "mask": open("temp_mask.png", "rb"),
-                        "strength": 0.99, # 1.0 = Maskeli alanı tamamen yeniden yarat
                         "num_inference_steps": 50,
-                        "guidance_scale": 15 # Komuta ne kadar sadık kalsın (Yüksek iyidir)
+                        "guidance_scale": 7.5
                     }
                 )
 
-                with col2:
-                    st.success("İşlem Başarılı!")
+                with col3:
+                    st.caption("3. Sonuç")
                     st.image(output[0], use_container_width=True)
+                    st.success("İşlem Başarılı!")
                     
             except Exception as e:
                 st.error(f"Hata: {str(e)}")
