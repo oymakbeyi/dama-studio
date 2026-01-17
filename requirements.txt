@@ -1,5 +1,5 @@
 streamlit
-replicate
-rembg[gpu]
+replicate==0.22.0
+rembg
 pillow
 numpy
