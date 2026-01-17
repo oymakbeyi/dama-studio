@@ -18,7 +18,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("DAMA STUDIO (Pro Mode) 🎨")
+st.title("DAMA STUDIO (Ratio Fix) 🎨")
 st.markdown("### El Yapımı Ürünler İçin Hassas Koruma Modu")
 
 # --- API ANAHTARI ---
@@ -45,12 +45,12 @@ with st.sidebar:
         )
     )
     
-    # DAHA KISA VE NET PROMPT (Arka plana odaklı)
+    # Promptlar
     prompts = {
-        "Mermer Masa & Gün Işığı": "white marble table, bright modern kitchen background, morning window light, soft shadows, 4k, photorealistic",
-        "Ahşap Konsol & Loş Işık": "rustic wooden table, cozy warm lighting, blurred living room background, cinematic lighting, 4k",
-        "Beton Zemin & Modern": "grey concrete pedestal, minimalist architectural style, indoor plant shadows, soft studio lighting, 4k",
-        "Düz Beyaz Sonsuz Fon": "pure white seamless infinity curve background, professional product photography, soft ground shadow"
+        "Mermer Masa & Gün Işığı": "high quality photo of a vase placed on a white marble table, bright modern kitchen background, morning window light, soft shadows, 4k, photorealistic",
+        "Ahşap Konsol & Loş Işık": "high quality photo of a vase placed on a rustic wooden table, cozy warm lighting, blurred living room background, cinematic lighting, 4k",
+        "Beton Zemin & Modern": "high quality photo of a vase placed on a grey concrete pedestal, minimalist architectural style, indoor plant shadows, soft studio lighting, 4k",
+        "Düz Beyaz Sonsuz Fon": "high quality photo of a vase placed on a pure white seamless infinity curve background, professional product photography, soft ground shadow"
     }
     
     selected_prompt = prompts[scene]
@@ -63,15 +63,18 @@ if uploaded_file and replicate_api:
     
     # 1. Orijinal Resmi Aç
     image = Image.open(uploaded_file).convert("RGB")
-    # İşlem hızı ve kalitesi için boyutu optimize et (512x512 bu model için idealdir)
-    image = image.resize((512, 512))
+    
+    # --- KRİTİK DÜZELTME: ORAN KORUMA ---
+    # Resize yerine thumbnail kullanıyoruz. Bu, en boy oranını bozmadan sığdırır.
+    # Vazo şişmanlamaz.
+    image.thumbnail((768, 768)) 
     
     with col1:
-        st.caption("1. Orijinal")
+        st.caption("1. Orijinal (Oran Korundu)")
         st.image(image, use_container_width=True)
 
     if st.button("✨ Sihirli Dokunuşu Yap"):
-        with st.spinner("Vazo korunuyor, arka plan inşa ediliyor..."):
+        with st.spinner("Vazo orijinal formunda korunuyor, arka plan inşa ediliyor..."):
             try:
                 # ADIM 1: MASKE OLUŞTURMA
                 buf = io.BytesIO()
@@ -82,31 +85,26 @@ if uploaded_file and replicate_api:
                 no_bg_image = remove(image_bytes)
                 pil_no_bg = Image.open(io.BytesIO(no_bg_image)).convert("RGBA")
                 
-                # Maskeyi Çıkar (Alpha Kanalı)
-                # Beyaz = Ürün, Siyah = Arka Plan
+                # Maskeyi Çıkar
                 mask = pil_no_bg.split()[-1]
                 
-                # TERS ÇEVİR (Invert):
-                # Bu modelde: BEYAZ = Değişecek Alan (Arka Plan), SİYAH = Korunacak Alan (Ürün)
+                # TERS ÇEVİR (Invert) - Siyah Korunur, Beyaz Boyanır
                 inverted_mask = ImageOps.invert(mask)
                 
                 with col2:
-                    st.caption("2. Koruma Kalkanı (Maske)")
+                    st.caption("2. Koruma Maskesi")
                     st.image(inverted_mask, use_container_width=True)
-                    st.info("Siyah alan korunur, Beyaz alan değişir.")
 
                 # Dosyaları kaydet
                 image.save("temp_orig.jpg")
                 inverted_mask.save("temp_mask.png")
 
-                # ADIM 2: REPLICATE (STRICT INPAINTING)
-                # Model Değişikliği: 'stability-ai/stable-diffusion-inpainting'
-                # Bu model maskeye çok daha sadıktır.
-                
+                # ADIM 2: REPLICATE (STABLE DIFFUSION 2 INPAINTING)
+                # Güncel ve çalışan Model ID
                 output = replicate.run(
-                    "stability-ai/stable-diffusion-inpainting:95b7223104132402a9ae91cc677285bc5eb997834bd2349fa486f53910fd595c",
+                    "stability-ai/stable-diffusion-inpainting:c28b92a7ecd66eee8aabc9c000c50702e7498321cf536041f45a9b3d2787713f",
                     input={
-                        "prompt": f"background of {selected_prompt}",
+                        "prompt": selected_prompt,
                         "image": open("temp_orig.jpg", "rb"),
                         "mask": open("temp_mask.png", "rb"),
                         "num_inference_steps": 50,
