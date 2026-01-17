@@ -240,15 +240,30 @@ if uploaded_file is not None:
                 st.image(mask, caption="Inverted Mask", use_container_width=True)
                 st.markdown("*White = Background to replace*")
             
-            # Generate Button
-            if st.button("✨ Generate New Background", use_container_width=True):
+            # Generate Button - MOVED TO MAIN AREA FOR VISIBILITY
+            st.markdown("---")
+            
+            col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
+            with col_btn2:
+                generate_clicked = st.button(
+                    "✨ GENERATE NEW BACKGROUND", 
+                    use_container_width=True,
+                    type="primary"
+                )
+            
+            st.markdown("---")
+            
+            if generate_clicked:
+            if generate_clicked:
                 if not api_token:
                     st.error("⚠️ Please enter your Replicate API token in the sidebar")
                 else:
                     # Get the prompt
                     prompt = SCENE_PROMPTS[selected_scene]
                     
-                    with st.spinner(f"Generating {selected_scene}... This may take 30-60 seconds"):
+                    st.info(f"🎨 Generating: **{selected_scene}**")
+                    
+                    with st.spinner(f"Creating your scene... This may take 30-60 seconds ⏳"):
                         result_url = run_inpainting(
                             square_image,
                             mask,
@@ -257,15 +272,16 @@ if uploaded_file is not None:
                         )
                     
                     if result_url:
-                        with col3:
-                            st.markdown("#### ✨ Result")
-                            st.image(result_url, caption="AI Generated Background", use_container_width=True)
+                        st.markdown("### ✨ Result")
+                        col_res1, col_res2, col_res3 = st.columns([1, 2, 1])
+                        with col_res2:
+                            st.image(result_url, caption=f"AI Generated: {selected_scene}", use_container_width=True)
                             
                             # Download button
-                            st.markdown(f"[⬇️ Download Image]({result_url})")
-                            st.success("✅ Generation complete!")
+                            st.markdown(f"### [⬇️ Download High-Res Image]({result_url})")
+                            st.success("✅ Generation complete! Right-click image to save.")
                     else:
-                        st.error("Failed to generate image. Please check your API token and try again.")
+                        st.error("❌ Failed to generate image. Please check your API token and try again.")
         else:
             st.error("Failed to process image. Please try a different image.")
             
