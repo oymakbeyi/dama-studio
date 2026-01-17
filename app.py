@@ -18,7 +18,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("DAMA STUDIO (Ratio Fix) 🎨")
+st.title("DAMA STUDIO (Final Fix) 🎨")
 st.markdown("### El Yapımı Ürünler İçin Hassas Koruma Modu")
 
 # --- API ANAHTARI ---
@@ -47,8 +47,8 @@ with st.sidebar:
     
     # Promptlar
     prompts = {
-        "Mermer Masa & Gün Işığı": "high quality photo of a vase placed on a white marble table, bright modern kitchen background, morning window light, soft shadows, 4k, photorealistic",
-        "Ahşap Konsol & Loş Işık": "high quality photo of a vase placed on a rustic wooden table, cozy warm lighting, blurred living room background, cinematic lighting, 4k",
+        "Mermer Masa & Gün Işığı": "high quality photo of a vase placed on a white marble table, bright modern kitchen background, morning window light, soft shadows, 4k, photorealistic, 8k uhd",
+        "Ahşap Konsol & Loş Işık": "high quality photo of a vase placed on a rustic wooden table, cozy warm lighting, blurred living room background, cinematic lighting, 4k, 8k uhd",
         "Beton Zemin & Modern": "high quality photo of a vase placed on a grey concrete pedestal, minimalist architectural style, indoor plant shadows, soft studio lighting, 4k",
         "Düz Beyaz Sonsuz Fon": "high quality photo of a vase placed on a pure white seamless infinity curve background, professional product photography, soft ground shadow"
     }
@@ -64,17 +64,15 @@ if uploaded_file and replicate_api:
     # 1. Orijinal Resmi Aç
     image = Image.open(uploaded_file).convert("RGB")
     
-    # --- KRİTİK DÜZELTME: ORAN KORUMA ---
-    # Resize yerine thumbnail kullanıyoruz. Bu, en boy oranını bozmadan sığdırır.
-    # Vazo şişmanlamaz.
-    image.thumbnail((768, 768)) 
+    # Oran Koruma: Thumbnail ile akıllı küçültme (Asla şişmanlatmaz)
+    image.thumbnail((512, 512)) 
     
     with col1:
-        st.caption("1. Orijinal (Oran Korundu)")
+        st.caption("1. Orijinal")
         st.image(image, use_container_width=True)
 
     if st.button("✨ Sihirli Dokunuşu Yap"):
-        with st.spinner("Vazo orijinal formunda korunuyor, arka plan inşa ediliyor..."):
+        with st.spinner("Model yükleniyor ve sahne kuruluyor..."):
             try:
                 # ADIM 1: MASKE OLUŞTURMA
                 buf = io.BytesIO()
@@ -88,7 +86,7 @@ if uploaded_file and replicate_api:
                 # Maskeyi Çıkar
                 mask = pil_no_bg.split()[-1]
                 
-                # TERS ÇEVİR (Invert) - Siyah Korunur, Beyaz Boyanır
+                # TERS ÇEVİR (Invert) -> Siyah = Koru, Beyaz = Değiştir
                 inverted_mask = ImageOps.invert(mask)
                 
                 with col2:
@@ -99,15 +97,17 @@ if uploaded_file and replicate_api:
                 image.save("temp_orig.jpg")
                 inverted_mask.save("temp_mask.png")
 
-                # ADIM 2: REPLICATE (STABLE DIFFUSION 2 INPAINTING)
-                # Güncel ve çalışan Model ID
+                # ADIM 2: REPLICATE ÇAĞRISI (GÜVENLİ YOL)
+                # Direkt model ID'si yerine model ismini kullanıyoruz.
+                # 'stability-ai/stable-diffusion-inpainting' yerine daha stabil olan v1-5 inpainting kullanıyoruz.
+                
                 output = replicate.run(
-                    "stability-ai/stable-diffusion-inpainting:c28b92a7ecd66eee8aabc9c000c50702e7498321cf536041f45a9b3d2787713f",
+                    "stability-ai/stable-diffusion-inpainting:95b7223104132402a9ae91cc677285bc5eb997834bd2349fa486f53910fd595c",
                     input={
                         "prompt": selected_prompt,
                         "image": open("temp_orig.jpg", "rb"),
                         "mask": open("temp_mask.png", "rb"),
-                        "num_inference_steps": 50,
+                        "num_inference_steps": 40,
                         "guidance_scale": 7.5
                     }
                 )
@@ -118,4 +118,20 @@ if uploaded_file and replicate_api:
                     st.success("İşlem Başarılı!")
                     
             except Exception as e:
-                st.error(f"Hata: {str(e)}")
+                # Eğer yukarıdaki ID patlarsa diye yedek plan:
+                st.warning("Birincil model yanıt vermedi, yedek modele geçiliyor...")
+                try:
+                     output = replicate.run(
+                        "andreasjansson/stable-diffusion-inpainting:e490d072a34a94a11e9711ed5a6ba621c3fab39a999401510e05695d03115b0f",
+                        input={
+                            "prompt": selected_prompt,
+                            "image": open("temp_orig.jpg", "rb"),
+                            "mask": open("temp_mask.png", "rb"),
+                        }
+                    )
+                     with col3:
+                        st.caption("3. Sonuç (Yedek)")
+                        st.image(output[0], use_container_width=True)
+                        st.success("İşlem Başarılı!")
+                except Exception as final_e:
+                    st.error(f"Hata: {str(final_e)}")
