@@ -120,7 +120,7 @@ def image_to_base64(image):
 def run_inpainting(image, mask, prompt, api_token):
     """
     Run Stable Diffusion Inpainting using Replicate API.
-    Uses stable model version hash.
+    Uses the latest available model.
     """
     try:
         # Convert images to base64
@@ -134,12 +134,12 @@ def run_inpainting(image, mask, prompt, api_token):
         # Set API token
         replicate_client = replicate.Client(api_token=api_token)
         
-        # Use specific stable model version
-        model_version = "stability-ai/stable-diffusion-inpainting:95b7223104132402a9ae91cc677285bc5eb997834bd2349fa486f53910fd595c"
+        # Use model identifier without specific version (uses latest)
+        model = "stability-ai/stable-diffusion-inpainting"
         
         # Run prediction using replicate.run()
         output = replicate_client.run(
-            model_version,
+            model,
             input={
                 "image": image_uri,
                 "mask": mask_uri,
@@ -157,6 +157,7 @@ def run_inpainting(image, mask, prompt, api_token):
         
     except Exception as e:
         st.error(f"AI Generation error: {str(e)}")
+        st.error(f"Details: {e}")
         return None
 
 # Sidebar
