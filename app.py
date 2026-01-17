@@ -110,7 +110,7 @@ def image_to_base64(image):
 
 def run_inpainting(image, mask, prompt, api_token):
     """
-    Run FLUX Inpainting - State-of-the-art 2025 model.
+    Run professional inpainting with working 2025 models.
     """
     try:
         replicate_client = replicate.Client(api_token=api_token)
@@ -122,33 +122,31 @@ def run_inpainting(image, mask, prompt, api_token):
         image_uri = f"data:image/png;base64,{image_b64}"
         mask_uri = f"data:image/png;base64,{mask_b64}"
         
-        # Try FLUX models in order of quality
+        # Try models in order of quality
         models = [
             {
-                "id": "zsxkib/flux-dev-inpainting",
-                "name": "FLUX Dev Inpainting (High Quality)",
+                "id": "black-forest-labs/flux-fill-pro",
+                "name": "FLUX Fill Pro (Professional)",
                 "params": {
-                    "image": image_uri,
                     "mask": mask_uri,
+                    "image": image_uri,
                     "prompt": prompt,
-                    "strength": 0.85,
-                    "num_inference_steps": 28,
-                    "guidance_scale": 3.5,
-                    "output_format": "png",
-                    "output_quality": 95
+                    "guidance": 3.5,
+                    "steps": 28,
+                    "prompt_upsampling": True,
+                    "safety_tolerance": 2
                 }
             },
             {
-                "id": "zsxkib/flux-schnell-inpainting",
-                "name": "FLUX Schnell (Fast)",
+                "id": "ideogram-ai/ideogram-v2",
+                "name": "Ideogram v2 (Excellent Quality)",
                 "params": {
                     "image": image_uri,
                     "mask": mask_uri,
                     "prompt": prompt,
-                    "strength": 0.85,
-                    "num_inference_steps": 4,
-                    "output_format": "png",
-                    "output_quality": 90
+                    "magic_prompt_option": "Auto",
+                    "aspect_ratio": "1:1",
+                    "resolution": "1024x1024"
                 }
             }
         ]
@@ -162,26 +160,33 @@ def run_inpainting(image, mask, prompt, api_token):
                     input=model_info['params']
                 )
                 
-                # Handle output
+                # Handle different output formats
                 if output:
-                    # FLUX models return FileOutput or string
+                    # Handle FileOutput object
                     if hasattr(output, 'url'):
-                        st.success(f"✅ Success with {model_info['name']}")
+                        st.success(f"✅ Success with {model_info['name']}!")
                         return output.url
-                    elif isinstance(output, str):
-                        st.success(f"✅ Success with {model_info['name']}")
+                    # Handle direct URL string
+                    elif isinstance(output, str) and output.startswith('http'):
+                        st.success(f"✅ Success with {model_info['name']}!")
                         return output
-                    elif hasattr(output, '__str__'):
-                        result_str = str(output)
-                        st.success(f"✅ Success with {model_info['name']}")
-                        return result_str
+                    # Handle list of outputs
+                    elif isinstance(output, list) and len(output) > 0:
+                        result = output[0]
+                        if hasattr(result, 'url'):
+                            st.success(f"✅ Success with {model_info['name']}!")
+                            return result.url
+                        elif isinstance(result, str):
+                            st.success(f"✅ Success with {model_info['name']}!")
+                            return result
                         
             except Exception as e:
                 error_msg = str(e)
-                st.warning(f"⚠️ {model_info['name']} failed: {error_msg[:150]}")
+                st.warning(f"⚠️ {model_info['name']} failed: {error_msg[:200]}")
                 continue
         
-        st.error("❌ All FLUX models failed. Please check your API token or try again later.")
+        st.error("❌ All models failed. Please verify your API token has access to these models.")
+        st.info("💡 Tip: Some models require paid Replicate credits. Check your account at replicate.com")
         return None
         
     except Exception as e:
