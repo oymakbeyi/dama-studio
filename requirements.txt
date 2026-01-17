@@ -1,5 +1,6 @@
 streamlit
 replicate==0.22.0
 rembg
+onnxruntime
 pillow
 numpy
