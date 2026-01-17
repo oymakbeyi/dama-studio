@@ -63,23 +63,13 @@ def make_square_with_padding(image, target_size=1024):
     Add white padding to make image square while preserving aspect ratio.
     This prevents the 'squashed/fat product' issue.
     """
-    # Get original dimensions
     width, height = image.size
-    
-    # Determine the maximum dimension
     max_dim = max(width, height)
-    
-    # Create a new square image with white background
     new_image = Image.new("RGB", (max_dim, max_dim), (255, 255, 255))
-    
-    # Calculate position to paste the original image (centered)
     paste_x = (max_dim - width) // 2
     paste_y = (max_dim - height) // 2
-    
-    # Paste the original image onto the white square
     new_image.paste(image, (paste_x, paste_y))
     
-    # Resize to target size if needed
     if max_dim != target_size:
         new_image = new_image.resize((target_size, target_size), Image.Resampling.LANCZOS)
     
@@ -91,21 +81,13 @@ def remove_background_and_create_mask(image):
     White = Background to replace, Black = Product to keep
     """
     try:
-        # Convert image to bytes
         img_byte_arr = io.BytesIO()
         image.save(img_byte_arr, format='PNG')
         img_byte_arr = img_byte_arr.getvalue()
         
-        # Remove background
         output = remove(img_byte_arr)
-        
-        # Convert to PIL Image
         output_image = Image.open(io.BytesIO(output)).convert("RGBA")
-        
-        # Extract alpha channel as mask
         alpha = output_image.split()[3]
-        
-        # Invert mask: White = Background, Black = Product
         inverted_mask = ImageOps.invert(alpha)
         
         return output_image, inverted_mask
@@ -125,21 +107,15 @@ def run_inpainting(image, mask, prompt, api_token):
     Uses the latest available model.
     """
     try:
-        # Convert images to base64
         image_b64 = image_to_base64(image)
         mask_b64 = image_to_base64(mask)
         
-        # Create data URIs
         image_uri = f"data:image/png;base64,{image_b64}"
         mask_uri = f"data:image/png;base64,{mask_b64}"
         
-        # Set API token
         replicate_client = replicate.Client(api_token=api_token)
-        
-        # Use model identifier without specific version (uses latest)
         model = "stability-ai/stable-diffusion-inpainting"
         
-        # Run prediction using replicate.run()
         output = replicate_client.run(
             model,
             input={
@@ -152,7 +128,6 @@ def run_inpainting(image, mask, prompt, api_token):
             }
         )
         
-        # Output is a list of URLs or file objects
         if output and len(output) > 0:
             return output[0]
         return None
@@ -166,7 +141,6 @@ def run_inpainting(image, mask, prompt, api_token):
 with st.sidebar:
     st.markdown("### ⚙️ Settings")
     
-    # API Token Input
     api_token = st.text_input(
         "Replicate API Token",
         type="password",
@@ -175,7 +149,6 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # Product Type Selection
     st.markdown("**Product Type**")
     product_type = st.selectbox(
         "Product Type",
@@ -185,7 +158,6 @@ with st.sidebar:
     )
     
     st.markdown("**Background Scene**")
-    # Scene Selection
     selected_scene = st.selectbox(
         "Background Scene",
         list(SCENE_PROMPTS.keys()),
@@ -193,7 +165,6 @@ with st.sidebar:
         label_visibility="collapsed"
     )
     
-    # Show selected prompt preview
     with st.expander("📝 View Full Prompt"):
         st.caption(SCENE_PROMPTS[selected_scene])
     
@@ -220,17 +191,14 @@ with col1:
 
 if uploaded_file is not None:
     try:
-        # Load original image
         original_image = Image.open(uploaded_file).convert("RGB")
         
         with col1:
             st.image(original_image, caption="Original Image", use_container_width=True)
             st.markdown(f"**Size:** {original_image.size[0]} x {original_image.size[1]}px")
         
-        # CRITICAL: Make image square with padding
         square_image = make_square_with_padding(original_image, target_size=1024)
         
-        # Process image: Remove background and create mask
         with st.spinner("Removing background..."):
             output_image, mask = remove_background_and_create_mask(square_image)
         
@@ -240,7 +208,6 @@ if uploaded_file is not None:
                 st.image(mask, caption="Inverted Mask", use_container_width=True)
                 st.markdown("*White = Background to replace*")
             
-            # Generate Button - MOVED TO MAIN AREA FOR VISIBILITY
             st.markdown("---")
             
             col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
@@ -254,30 +221,20 @@ if uploaded_file is not None:
             st.markdown("---")
             
             if generate_clicked:
-            if generate_clicked:
                 if not api_token:
                     st.error("⚠️ Please enter your Replicate API token in the sidebar")
                 else:
-                    # Get the prompt
                     prompt = SCENE_PROMPTS[selected_scene]
-                    
                     st.info(f"🎨 Generating: **{selected_scene}**")
                     
                     with st.spinner(f"Creating your scene... This may take 30-60 seconds ⏳"):
-                        result_url = run_inpainting(
-                            square_image,
-                            mask,
-                            prompt,
-                            api_token
-                        )
+                        result_url = run_inpainting(square_image, mask, prompt, api_token)
                     
                     if result_url:
                         st.markdown("### ✨ Result")
                         col_res1, col_res2, col_res3 = st.columns([1, 2, 1])
                         with col_res2:
                             st.image(result_url, caption=f"AI Generated: {selected_scene}", use_container_width=True)
-                            
-                            # Download button
                             st.markdown(f"### [⬇️ Download High-Res Image]({result_url})")
                             st.success("✅ Generation complete! Right-click image to save.")
                     else:
@@ -288,7 +245,6 @@ if uploaded_file is not None:
     except Exception as e:
         st.error(f"Error processing image: {str(e)}")
         st.exception(e)
-
 else:
     with col1:
         st.info("👆 Upload an image to get started")
