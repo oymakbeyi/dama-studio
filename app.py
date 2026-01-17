@@ -233,7 +233,7 @@ with st.sidebar:
     """)
 
 # Main Content Area
-col1, col2, col3 = st.columns(3)
+col1, col2 = st.columns(2)
 
 with col1:
     st.markdown("#### 📤 Upload Image")
@@ -258,27 +258,23 @@ if uploaded_file is not None:
         
         if output_image and mask:
             with col2:
-                st.markdown("#### 🎭 Mask (Debug)")
-                st.image(mask, caption="Inverted Mask", use_container_width=True)
-                st.markdown("*White = Background to replace*")
-        
-        # CRITICAL: Show button OUTSIDE the column context
-        if output_image and mask:
-            st.markdown("---")
-            st.markdown("---")
+                st.markdown("#### 🎭 Mask Preview")
+                st.image(mask, caption="Background Detection", use_container_width=True)
+                st.caption("⚫ Black = Product (keep) | ⚪ White = Background (replace)")
             
-            # Big centered button
-            _, center_col, _ = st.columns([1, 2, 1])
-            with center_col:
-                st.markdown("### 🎨 Ready to Generate!")
-                generate_clicked = st.button(
-                    "✨ GENERATE NEW BACKGROUND", 
-                    use_container_width=True,
-                    type="primary",
-                    key="generate_btn"
-                )
-            
+            # BIG GENERATE BUTTON - Very visible!
+            st.markdown("<br>", unsafe_allow_html=True)
             st.markdown("---")
+            st.markdown("## 🎨 Step 3: Generate New Background")
+            st.markdown(f"**Selected Scene:** {selected_scene}")
+            
+            generate_clicked = st.button(
+                "🚀 GENERATE NEW BACKGROUND NOW!", 
+                use_container_width=True,
+                type="primary",
+                key="generate_btn",
+                help=f"Click to place your product in: {selected_scene}"
+            )
             st.markdown("---")
             
             if generate_clicked:
@@ -287,39 +283,44 @@ if uploaded_file is not None:
                 else:
                     prompt = SCENE_PROMPTS[selected_scene]
                     
-                    # Show what we're generating
-                    st.success(f"🎨 **Generating Scene:** {selected_scene}")
-                    st.info(f"📝 **Using Prompt:** {prompt[:100]}...")
+                    # Clear status display
+                    status_container = st.container()
+                    with status_container:
+                        st.success(f"🎨 **Generating Scene:** {selected_scene}")
+                        st.info(f"📝 **AI Prompt:** {prompt[:150]}...")
                     
-                    with st.spinner(f"⏳ Creating your scene... This may take 30-60 seconds"):
+                    with st.spinner(f"⏳ AI is working... This takes 30-60 seconds"):
                         result_url = run_inpainting(square_image, mask, prompt, api_token)
                     
                     if result_url:
                         st.balloons()
                         st.markdown("---")
-                        st.markdown("# ✨ YOUR RESULT IS READY!")
+                        st.markdown("# ✨ SUCCESS! Your New Product Photo")
                         st.markdown("---")
                         
-                        # Show result in a large display
-                        result_col1, result_col2, result_col3 = st.columns([0.5, 3, 0.5])
-                        with result_col2:
-                            st.image(result_url, caption=f"🎨 {selected_scene}", use_container_width=True)
-                            
-                            # Download instructions
-                            st.markdown("### 📥 Download Your Image:")
-                            st.markdown(f"**[Click here to download]({result_url})** or right-click the image above")
-                            st.success("✅ Generation complete!")
-                            
-                            # Show comparison
-                            st.markdown("---")
-                            st.markdown("### 📊 Before & After")
-                            comp_col1, comp_col2 = st.columns(2)
-                            with comp_col1:
-                                st.image(original_image, caption="Original", use_container_width=True)
-                            with comp_col2:
-                                st.image(result_url, caption="AI Generated", use_container_width=True)
+                        # Large result display
+                        st.image(result_url, caption=f"🎨 {selected_scene}", use_container_width=True)
+                        
+                        # Download section
+                        st.markdown("### 📥 Download Options:")
+                        col_dl1, col_dl2 = st.columns(2)
+                        with col_dl1:
+                            st.markdown(f"**[⬇️ Download High-Res Image]({result_url})**")
+                        with col_dl2:
+                            st.info("💡 Tip: Right-click → Save Image As...")
+                        
+                        # Before & After comparison
+                        st.markdown("---")
+                        st.markdown("### 📊 Before & After Comparison")
+                        comp_col1, comp_col2 = st.columns(2)
+                        with comp_col1:
+                            st.image(original_image, caption="📸 Original Upload", use_container_width=True)
+                        with comp_col2:
+                            st.image(result_url, caption=f"✨ AI Generated: {selected_scene}", use_container_width=True)
+                        
+                        st.success("✅ Generation complete! Try different scenes by changing the selection in the sidebar.")
                     else:
-                        st.error("❌ Failed to generate image. Please try again or check your API token.")
+                        st.error("❌ Generation failed. The AI models might be temporarily unavailable. Please try again in a moment.")
         else:
             st.error("Failed to process image. Please try a different image.")
             
