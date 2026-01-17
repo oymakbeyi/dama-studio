@@ -104,8 +104,15 @@ def image_to_base64(image):
 def run_inpainting(image, mask, prompt, api_token):
     """
     Run Stable Diffusion Inpainting using Replicate API.
-    Uses the latest available model.
+    Uses multiple fallback models for reliability.
     """
+    # List of working inpainting models (in priority order)
+    models = [
+        "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
+        "lucataco/sdxl-inpainting:f2a36c58e62d36ad7502f096d9e3e7fb64192f13be3b1f5e023cc9f3e5b4e21a",
+        "adirik/sdxl-inpainting:9cff4c80e82e6e0e7f5fa00e12c34f021ed365462b5ec2aaef3c82d0a2d1b87e"
+    ]
+    
     try:
         image_b64 = image_to_base64(image)
         mask_b64 = image_to_base64(mask)
@@ -114,22 +121,57 @@ def run_inpainting(image, mask, prompt, api_token):
         mask_uri = f"data:image/png;base64,{mask_b64}"
         
         replicate_client = replicate.Client(api_token=api_token)
-        model = "stability-ai/stable-diffusion-inpainting"
         
-        output = replicate_client.run(
-            model,
-            input={
-                "image": image_uri,
-                "mask": mask_uri,
-                "prompt": prompt,
-                "num_outputs": 1,
-                "guidance_scale": 7.5,
-                "num_inference_steps": 25
-            }
-        )
+        # Try each model until one works
+        last_error = None
+        for model in models:
+            try:
+                st.info(f"🔄 Trying model: {model.split(':')[0]}...")
+                
+                # Different models may have different input parameters
+                if "sdxl" in model.lower():
+                    # SDXL-based models
+                    output = replicate_client.run(
+                        model,
+                        input={
+                            "image": image_uri,
+                            "mask": mask_uri,
+                            "prompt": prompt,
+                            "num_outputs": 1,
+                            "guidance_scale": 7.5,
+                            "num_inference_steps": 30,
+                            "scheduler": "K_EULER"
+                        }
+                    )
+                else:
+                    # Standard SD 1.5 models
+                    output = replicate_client.run(
+                        model,
+                        input={
+                            "image": image_uri,
+                            "mask": mask_uri,
+                            "prompt": prompt,
+                            "num_outputs": 1,
+                            "guidance_scale": 7.5,
+                            "num_inference_steps": 25
+                        }
+                    )
+                
+                # If we get here, it worked!
+                if output:
+                    # Handle different output formats
+                    if isinstance(output, list) and len(output) > 0:
+                        return output[0]
+                    elif isinstance(output, str):
+                        return output
+                    
+            except Exception as model_error:
+                last_error = model_error
+                st.warning(f"⚠️ Model failed: {str(model_error)[:100]}")
+                continue
         
-        if output and len(output) > 0:
-            return output[0]
+        # If all models failed
+        st.error(f"❌ All models failed. Last error: {str(last_error)}")
         return None
         
     except Exception as e:
