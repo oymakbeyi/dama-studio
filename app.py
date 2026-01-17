@@ -110,93 +110,78 @@ def image_to_base64(image):
 
 def run_inpainting(image, mask, prompt, api_token):
     """
-    Run AI Inpainting - tries multiple approaches to preserve the product.
+    Run FLUX Inpainting - State-of-the-art 2025 model.
     """
     try:
         replicate_client = replicate.Client(api_token=api_token)
         
-        # Approach 1: Try with the mask as-is (Black=keep, White=change)
-        st.info("🎨 Attempt 1: Standard inpainting...")
-        
+        # Convert to base64
         image_b64 = image_to_base64(image)
         mask_b64 = image_to_base64(mask)
         
         image_uri = f"data:image/png;base64,{image_b64}"
         mask_uri = f"data:image/png;base64,{mask_b64}"
         
-        try:
-            output = replicate_client.run(
-                "stability-ai/stable-diffusion-inpainting",
-                input={
+        # Try FLUX models in order of quality
+        models = [
+            {
+                "id": "zsxkib/flux-dev-inpainting",
+                "name": "FLUX Dev Inpainting (High Quality)",
+                "params": {
                     "image": image_uri,
                     "mask": mask_uri,
                     "prompt": prompt,
-                    "negative_prompt": "blurry, low quality, distorted, deformed, duplicate objects, multiple products",
-                    "num_inference_steps": 30,
-                    "guidance_scale": 8.0
+                    "strength": 0.85,
+                    "num_inference_steps": 28,
+                    "guidance_scale": 3.5,
+                    "output_format": "png",
+                    "output_quality": 95
                 }
-            )
-            
-            if output and len(output) > 0:
-                result = output[0]
-                if hasattr(result, 'url'):
-                    return result.url
-                elif isinstance(result, str):
-                    return result
-        except Exception as e1:
-            st.warning(f"Attempt 1 failed: {str(e1)[:100]}")
-        
-        # Approach 2: Try with inverted mask
-        st.info("🎨 Attempt 2: Inverted mask...")
-        inverted_mask = ImageOps.invert(mask)
-        inverted_mask_b64 = image_to_base64(inverted_mask)
-        inverted_mask_uri = f"data:image/png;base64,{inverted_mask_b64}"
-        
-        try:
-            output = replicate_client.run(
-                "stability-ai/stable-diffusion-inpainting",
-                input={
-                    "image": image_uri,
-                    "mask": inverted_mask_uri,
-                    "prompt": prompt,
-                    "negative_prompt": "blurry, low quality, distorted",
-                    "num_inference_steps": 30,
-                    "guidance_scale": 8.0
-                }
-            )
-            
-            if output and len(output) > 0:
-                result = output[0]
-                if hasattr(result, 'url'):
-                    st.success("✅ Used inverted mask approach")
-                    return result.url
-                elif isinstance(result, str):
-                    return result
-        except Exception as e2:
-            st.warning(f"Attempt 2 failed: {str(e2)[:100]}")
-        
-        # Approach 3: Try ComfyUI-based inpainting
-        st.info("🎨 Attempt 3: Advanced inpainting model...")
-        try:
-            output = replicate_client.run(
-                "fofr/sdxl-inpaint:567fe9dc9e1fd97897c7b07f9e5a4e0c5f0c6f1f55e1234567890abcdef12345",
-                input={
+            },
+            {
+                "id": "zsxkib/flux-schnell-inpainting",
+                "name": "FLUX Schnell (Fast)",
+                "params": {
                     "image": image_uri,
                     "mask": mask_uri,
                     "prompt": prompt,
-                    "strength": 0.8
+                    "strength": 0.85,
+                    "num_inference_steps": 4,
+                    "output_format": "png",
+                    "output_quality": 90
                 }
-            )
-            
-            if output:
-                if hasattr(output, 'url'):
-                    return output.url
-                elif isinstance(output, str):
-                    return output
-        except:
-            pass
+            }
+        ]
         
-        st.error("❌ All inpainting attempts failed")
+        for model_info in models:
+            try:
+                st.info(f"🎨 Using: {model_info['name']}...")
+                
+                output = replicate_client.run(
+                    model_info['id'],
+                    input=model_info['params']
+                )
+                
+                # Handle output
+                if output:
+                    # FLUX models return FileOutput or string
+                    if hasattr(output, 'url'):
+                        st.success(f"✅ Success with {model_info['name']}")
+                        return output.url
+                    elif isinstance(output, str):
+                        st.success(f"✅ Success with {model_info['name']}")
+                        return output
+                    elif hasattr(output, '__str__'):
+                        result_str = str(output)
+                        st.success(f"✅ Success with {model_info['name']}")
+                        return result_str
+                        
+            except Exception as e:
+                error_msg = str(e)
+                st.warning(f"⚠️ {model_info['name']} failed: {error_msg[:150]}")
+                continue
+        
+        st.error("❌ All FLUX models failed. Please check your API token or try again later.")
         return None
         
     except Exception as e:
