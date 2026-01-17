@@ -1,0 +1,5 @@
+streamlit
+replicate
+rembg[gpu]
+pillow
+numpy
